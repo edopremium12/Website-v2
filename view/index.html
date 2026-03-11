@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suit Multiplayer Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hidden-section { display: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen">
+
+    <div id="app" class="max-w-md mx-auto pt-10 px-4">
+        
+        <div id="auth-section" class="bg-gray-800 p-6 rounded-lg shadow-xl">
+            <h1 class="text-3xl font-bold text-center mb-6 text-blue-400">Suit Online</h1>
+            
+            <div id="login-form">
+                <input type="email" id="login-email" placeholder="Email" class="w-full mb-3 p-3 rounded bg-gray-700 text-white">
+                <input type="password" id="login-password" placeholder="Password" class="w-full mb-4 p-3 rounded bg-gray-700 text-white">
+                <button id="btn-login" class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded font-bold mb-4">Masuk</button>
+                <p class="text-center text-sm">Belum punya akun? <a href="#" id="go-to-register" class="text-blue-400">Daftar</a></p>
+            </div>
+
+            <div id="register-form" class="hidden-section">
+                <input type="text" id="reg-name" placeholder="Nama Lengkap" class="w-full mb-3 p-3 rounded bg-gray-700 text-white">
+                <input type="text" id="reg-city" placeholder="Kota" class="w-full mb-3 p-3 rounded bg-gray-700 text-white">
+                <input type="email" id="reg-email" placeholder="Email" class="w-full mb-3 p-3 rounded bg-gray-700 text-white">
+                <input type="password" id="reg-password" placeholder="Password" class="w-full mb-3 p-3 rounded bg-gray-700 text-white">
+                <input type="password" id="reg-confirm" placeholder="Konfirmasi Password" class="w-full mb-4 p-3 rounded bg-gray-700 text-white">
+                <button id="btn-register" class="w-full bg-green-600 hover:bg-green-700 p-3 rounded font-bold mb-4">Buat Akun</button>
+                <p class="text-center text-sm">Sudah punya akun? <a href="#" id="go-to-login" class="text-blue-400">Login</a></p>
+            </div>
+        </div>
+
+        <div id="dashboard-section" class="hidden-section bg-gray-800 p-6 rounded-lg shadow-xl">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-blue-400">Lobby</h2>
+                    <p class="text-sm">Halo, <span id="user-display-name" class="font-bold"></span> | Limit: <span id="user-limit" class="text-yellow-400 font-bold"></span></p>
+                </div>
+                <button id="btn-logout" class="bg-red-600 px-3 py-1 rounded hover:bg-red-700">Logout</button>
+            </div>
+
+            <div class="bg-gray-700 p-4 rounded mb-6">
+                <h3 class="font-bold mb-2">Buat Room</h3>
+                <input type="text" id="room-name" placeholder="Nama Room" class="w-full mb-2 p-2 rounded bg-gray-600 text-white">
+                <input type="text" id="room-pin" placeholder="PIN (Opsional - Kosong = Public)" class="w-full mb-2 p-2 rounded bg-gray-600 text-white">
+                <button id="btn-create-room" class="w-full bg-blue-500 hover:bg-blue-600 p-2 rounded font-bold">Bikin Room</button>
+            </div>
+
+            <h3 class="font-bold mb-2">Room Aktif (Real-time)</h3>
+            <div id="room-list" class="space-y-2 max-h-64 overflow-y-auto">
+                </div>
+        </div>
+
+        <div id="game-section" class="hidden-section bg-gray-800 p-6 rounded-lg shadow-xl text-center">
+            <h2 id="current-room-name" class="text-2xl font-bold text-blue-400 mb-2">Nama Room</h2>
+            <p id="game-status" class="text-yellow-400 mb-6">Menunggu lawan...</p>
+
+            <div class="flex justify-between items-center mb-8">
+                <div class="w-1/2">
+                    <h3 class="font-bold">Kamu</h3>
+                    <div id="my-choice" class="text-4xl mt-2">❓</div>
+                </div>
+                <div class="text-2xl font-bold">VS</div>
+                <div class="w-1/2">
+                    <h3 class="font-bold" id="opponent-name">Lawan</h3>
+                    <div id="opponent-choice" class="text-4xl mt-2">❓</div>
+                </div>
+            </div>
+
+            <div id="action-buttons" class="flex justify-center space-x-4 mb-6 opacity-50 pointer-events-none">
+                <button class="choice-btn bg-gray-700 hover:bg-gray-600 p-4 rounded-full text-3xl" data-choice="batu">✊</button>
+                <button class="choice-btn bg-gray-700 hover:bg-gray-600 p-4 rounded-full text-3xl" data-choice="kertas">🖐️</button>
+                <button class="choice-btn bg-gray-700 hover:bg-gray-600 p-4 rounded-full text-3xl" data-choice="gunting">✌️</button>
+            </div>
+
+            <button id="btn-leave-room" class="w-full bg-red-600 hover:bg-red-700 p-2 rounded font-bold">Keluar Room</button>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getDatabase, ref, set, get, onValue, update, remove, push, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAgp27hYSZ433dBtrVDwmatt5xCJ6EOt9U",
+            authDomain: "cayang.firebaseapp.com",
+            projectId: "cayang",
+            storageBucket: "cayang.firebasestorage.app",
+            messagingSenderId: "960652456673",
+            appId: "1:960652456673:web:21f18d74ad28728e187da0",
+            measurementId: "G-TCP3QM8EC7"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        let currentUser = null;
+        let userData = null;
+        let currentRoomId = null;
+        let isHost = false;
+
+        // --- UI TOGGLES ---
+        const showSection = (sectionId) => {
+            ['auth-section', 'dashboard-section', 'game-section'].forEach(id => {
+                document.getElementById(id).classList.add('hidden-section');
+            });
+            document.getElementById(sectionId).classList.remove('hidden-section');
+        };
+
+        document.getElementById('go-to-register').onclick = () => {
+            document.getElementById('login-form').classList.add('hidden-section');
+            document.getElementById('register-form').classList.remove('hidden-section');
+        };
+        document.getElementById('go-to-login').onclick = () => {
+            document.getElementById('register-form').classList.add('hidden-section');
+            document.getElementById('login-form').classList.remove('hidden-section');
+        };
+
+        // --- AUTH LOGIC ---
+        document.getElementById('btn-register').onclick = async () => {
+            const email = document.getElementById('reg-email').value;
+            const pass = document.getElementById('reg-password').value;
+            const conf = document.getElementById('reg-confirm').value;
+            const name = document.getElementById('reg-name').value;
+            const city = document.getElementById('reg-city').value;
+
+            if (pass !== conf) return alert("Password tidak cocok!");
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                // Simpan data di Realtime DB
+                await set(ref(db, 'users/' + userCredential.user.uid), {
+                    name, city, email, limit: 10 // Modal awal limit 10
+                });
+                alert("Daftar berhasil!");
+            } catch (error) { alert("Error: " + error.message); }
+        };
+
+        document.getElementById('btn-login').onclick = async () => {
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-password').value;
+            try { await signInWithEmailAndPassword(auth, email, pass); } 
+            catch (error) { alert("Login gagal: " + error.message); }
+        };
+
+        document.getElementById('btn-logout').onclick = () => signOut(auth);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                const snapshot = await get(ref(db, 'users/' + user.uid));
+                userData = snapshot.val();
+                document.getElementById('user-display-name').innerText = userData.name;
+                
+                // Listener untuk Limit Real-time
+                onValue(ref(db, 'users/' + user.uid + '/limit'), (snap) => {
+                    document.getElementById('user-limit').innerText = snap.val();
+                    userData.limit = snap.val();
+                });
+
+                showSection('dashboard-section');
+                listenToRooms();
+            } else {
+                currentUser = null;
+                showSection('auth-section');
+            }
+        });
+
+        // --- DASHBOARD & ROOM LOGIC ---
+        document.getElementById('btn-create-room').onclick = async () => {
+            const roomName = document.getElementById('room-name').value;
+            const pin = document.getElementById('room-pin').value;
+            if(!roomName) return alert("Nama room wajib diisi!");
+
+            const newRoomRef = push(ref(db, 'rooms'));
+            currentRoomId = newRoomRef.key;
+            isHost = true;
+
+            await set(newRoomRef, {
+                name: roomName,
+                pin: pin,
+                isPrivate: pin !== "",
+                host: { uid: currentUser.uid, name: userData.name, choice: "" },
+                guest: null,
+                state: "waiting"
+            });
+
+            enterGameRoom(roomName);
+        };
+
+        const listenToRooms = () => {
+            onValue(ref(db, 'rooms'), (snapshot) => {
+                const roomList = document.getElementById('room-list');
+                roomList.innerHTML = '';
+                snapshot.forEach(childSnapshot => {
+                    const room = childSnapshot.val();
+                    const rId = childSnapshot.key;
+                    if (room.state === "waiting") {
+                        const div = document.createElement('div');
+                        div.className = "bg-gray-600 p-3 rounded flex justify-between items-center";
+                        div.innerHTML = `
+                            <div>
+                                <span class="font-bold">${room.name}</span> 
+                                ${room.isPrivate ? '🔒' : '🔓'}
+                                <br><span class="text-xs">Host: ${room.host.name}</span>
+                            </div>
+                            <button class="bg-green-500 px-3 py-1 rounded hover:bg-green-600" onclick="joinRoom('${rId}', '${room.isPrivate}', '${room.pin}', '${room.name}')">Join</button>
+                        `;
+                        roomList.appendChild(div);
+                    }
+                });
+            });
+        };
+
+        window.joinRoom = async (rId, isPrivate, correctPin, roomName) => {
+            if(userData.limit <= 0) return alert("Limit kamu habis!");
+            if(isPrivate === 'true') {
+                const inputPin = prompt("Masukkan PIN Room:");
+                if(inputPin !== correctPin) return alert("PIN Salah!");
+            }
+
+            currentRoomId = rId;
+            isHost = false;
+            
+            await update(ref(db, 'rooms/' + rId), {
+                guest: { uid: currentUser.uid, name: userData.name, choice: "" },
+                state: "playing"
+            });
+
+            enterGameRoom(roomName);
+        };
+
+        // --- GAME LOGIC ---
+        let roomListener;
+        const enterGameRoom = (name) => {
+            document.getElementById('current-room-name').innerText = name;
+            document.getElementById('my-choice').innerText = "❓";
+            document.getElementById('opponent-choice').innerText = "❓";
+            document.getElementById('action-buttons').classList.add('opacity-50', 'pointer-events-none');
+            showSection('game-section');
+
+            // Dengarkan perubahan pada room spesifik ini
+            roomListener = onValue(ref(db, 'rooms/' + currentRoomId), (snapshot) => {
+                const room = snapshot.val();
+                if(!room) {
+                    alert("Room ditutup.");
+                    leaveRoom();
+                    return;
+                }
+
+                if(room.state === "waiting") {
+                    document.getElementById('game-status').innerText = "Menunggu lawan...";
+                    document.getElementById('opponent-name').innerText = "Lawan";
+                } else if (room.state === "playing") {
+                    const opponentName = isHost ? room.guest.name : room.host.name;
+                    document.getElementById('opponent-name').innerText = opponentName;
+                    
+                    const myChoice = isHost ? room.host.choice : room.guest.choice;
+                    const opChoice = isHost ? room.guest.choice : room.host.choice;
+
+                    document.getElementById('game-status').innerText = "Silakan pilih Batu/Gunting/Kertas!";
+                    document.getElementById('action-buttons').classList.remove('opacity-50', 'pointer-events-none');
+
+                    if(myChoice !== "") document.getElementById('my-choice').innerText = "✅";
+                    if(opChoice !== "") document.getElementById('opponent-choice').innerText = "✅";
+
+                    // Jika keduanya sudah memilih
+                    if(room.host.choice !== "" && room.guest.choice !== "") {
+                        document.getElementById('action-buttons').classList.add('opacity-50', 'pointer-events-none');
+                        determineWinner(room.host, room.guest);
+                    }
+                }
+            });
+        };
+
+        document.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.onclick = async (e) => {
+                const choice = e.target.dataset.choice;
+                const path = isHost ? 'host/choice' : 'guest/choice';
+                await update(ref(db, `rooms/${currentRoomId}`), { [path]: choice });
+            };
+        });
+
+        const emojis = { batu: "✊", kertas: "🖐️", gunting: "✌️" };
+
+        const determineWinner = async (host, guest) => {
+            document.getElementById('my-choice').innerText = isHost ? emojis[host.choice] : emojis[guest.choice];
+            document.getElementById('opponent-choice').innerText = isHost ? emojis[guest.choice] : emojis[host.choice];
+
+            let status = "Seri!";
+            let winnerUid = null;
+            let loserUid = null;
+
+            if (host.choice !== guest.choice) {
+                if (
+                    (host.choice === "batu" && guest.choice === "gunting") ||
+                    (host.choice === "gunting" && guest.choice === "kertas") ||
+                    (host.choice === "kertas" && guest.choice === "batu")
+                ) {
+                    status = isHost ? "Kamu Menang! 🎉" : "Kamu Kalah! 😢";
+                    winnerUid = host.uid;
+                    loserUid = guest.uid;
+                } else {
+                    status = isHost ? "Kamu Kalah! 😢" : "Kamu Menang! 🎉";
+                    winnerUid = guest.uid;
+                    loserUid = host.uid;
+                }
+            }
+            
+            document.getElementById('game-status').innerText = status;
+
+            // Host yang bertanggung jawab membagikan limit agar tidak ganda
+            if (isHost && winnerUid) {
+                const winnerRef = ref(db, `users/${winnerUid}/limit`);
+                const loserRef = ref(db, `users/${loserUid}/limit`);
+                
+                get(winnerRef).then(snap => set(winnerRef, snap.val() + 1));
+                get(loserRef).then(snap => set(loserRef, snap.val() - 1));
+            }
+
+            // Reset room setelah 3 detik untuk ronde selanjutnya
+            if(isHost) {
+                setTimeout(async () => {
+                    await update(ref(db, `rooms/${currentRoomId}`), {
+                        'host/choice': "",
+                        'guest/choice': ""
+                    });
+                }, 3000);
+            }
+        };
+
+        const leaveRoom = async () => {
+            if(currentRoomId && isHost) {
+                await remove(ref(db, 'rooms/' + currentRoomId));
+            } else if (currentRoomId && !isHost) {
+                await update(ref(db, 'rooms/' + currentRoomId), {
+                    guest: null,
+                    state: "waiting",
+                    'host/choice': ""
+                });
+            }
+            currentRoomId = null;
+            showSection('dashboard-section');
+        };
+
+        document.getElementById('btn-leave-room').onclick = leaveRoom;
+
+    </script>
+</body>
+</html>
